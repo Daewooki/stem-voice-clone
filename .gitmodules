@@ -1,0 +1,3 @@
+[submodule "vendor/YingMusic-SVC"]
+	path = vendor/YingMusic-SVC
+	url = https://github.com/GiantAILab/YingMusic-SVC.git

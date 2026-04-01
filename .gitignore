@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+venv/
+
+# Audio files (users provide their own)
+*.wav
+*.mp3
+*.flac
+*.ogg
+*.m4a
+
+# BUT include demo audio files in examples/
+!examples/demo_stems/**/*.wav
+!examples/reference_voice.wav
+
+# Model checkpoints (auto-downloaded)
+vendor/YingMusic-SVC/checkpoints/*.pt
+vendor/YingMusic-SVC/checkpoints/hf_cache/
+
+# Output
+output/
+_raw/
+_separated/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Development artifacts
+.pytest_cache/
+docs/superpowers/
+examples/demo_output/
