@@ -23,7 +23,7 @@ Existing voice cloning tools convert a single vocal track. When applied to a mix
 
 All demo audio is AI-generated with [Suno](https://suno.com/) — fully copyright-free.
 
-**[Listen to the Before/After comparison on the demo page](https://daewook.github.io/stem-voice-clone/)**
+**[Listen to the Before/After comparison on the demo page](https://daewooki.github.io/stem-voice-clone/)**
 
 | | Original Song | Target Voice | Converted Result |
 |---|---|---|---|
