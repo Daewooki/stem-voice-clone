@@ -1,5 +1,7 @@
 # stem-voice-clone
 
+**[한국어](README_ko.md)** | English
+
 **Multi-stem singing voice cloning toolkit.**
 Clone any singing voice onto every vocal stem track — preserving all layers.
 
@@ -7,32 +9,56 @@ Clone any singing voice onto every vocal stem track — preserving all layers.
 
 ---
 
-## Why Multi-Stem?
+## The Problem
 
-Existing voice cloning tools convert a single vocal track. When applied to a mixed song, you lose the richness of layered vocal production.
+Existing AI voice cloning tools process a **single vocal track**. But professionally produced songs contain multiple vocal layers:
 
-| | Single Track (existing tools) | Multi-Stem (this tool) |
+- **Main vocal** — the lead singing voice
+- **Backing vocals (BGV)** — harmonies, chorus, "ooh"s and "aah"s
+- **Ad-libs** — vocal flourishes, ad-libbed phrases
+- **Vocal effects** — processed or layered vocal textures
+
+When you separate vocals from a mixed song (e.g., with Demucs) and convert that one track, **all these layers collapse into one**. The result sounds thin, flat, and loses the production quality of the original.
+
+## The Solution
+
+**stem-voice-clone** takes a different approach: if you have the original vocal stems, it converts **each stem individually** and reassembles them. Every vocal layer is preserved.
+
+| | Single Track (existing tools) | Multi-Stem (stem-voice-clone) |
 |---|---|---|
 | Input | 1 audio file | Folder of vocal stems |
-| Vocal layers | Merged into one | Each converted separately |
+| Process | Separate → convert 1 track | Convert each stem separately |
+| Vocal layers | Merged into one | Each preserved individually |
 | Harmonies/BGV | Lost or degraded | Fully preserved |
-| Ad-libs | Mixed in | Individually converted |
-| Result | Thin, flat | Full, production-quality |
+| Ad-libs | Mixed in, hard to distinguish | Individually converted |
+| Result quality | Thin, flat | **Full, production-quality** |
 
-### Demo: Voice Conversion Result
+No stems? No problem — **Single mode** auto-separates vocals with [Demucs](https://github.com/facebookresearch/demucs) and converts them. You still get a result, just without the multi-layer benefit.
+
+---
+
+## Demo
 
 All demo audio is AI-generated with [Suno](https://suno.com/) — fully copyright-free.
 
-**[Listen to the Before/After comparison on the demo page](https://daewooki.github.io/stem-voice-clone/)**
+**[Listen to the Before/After comparison](https://daewooki.github.io/stem-voice-clone/)**
 
-| | Original Song | Target Voice | Converted Result |
-|---|---|---|---|
-| **Description** | Pop ballad (male vocal) | Funk pop (female vocal) | Same song, new voice |
-| **Audio** | [Play original](docs/audio/original.mp4) | [Play target](docs/audio/target.mp4) | [Play converted](docs/audio/converted.mp4) |
+| Original Song | Target Voice | Converted Result |
+|:---:|:---:|:---:|
+| [Play](docs/audio/original.mp4) | [Play](docs/audio/target.mp4) | [Play](docs/audio/converted.mp4) |
+| Pop ballad, male vocal | Soft ballad, female vocal | Same song, new voice |
+
+> Each vocal stem (main + backing vocals) was converted **individually** — this is what preserves the full layered sound.
 
 ---
 
 ## Quick Start
+
+### Requirements
+
+- **Python 3.10+**
+- **NVIDIA GPU** with 6GB+ VRAM
+- **CUDA** (11.8 or newer)
 
 ### Installation
 
@@ -47,11 +73,15 @@ install.bat
 chmod +x install.sh && ./install.sh
 ```
 
-**Requirements:** Python 3.10+, NVIDIA GPU (6GB+ VRAM), CUDA
+The install script will:
+1. Create a Python virtual environment
+2. Install PyTorch with CUDA support
+3. Install all dependencies
+4. Download the YingMusic-SVC model checkpoint (~700MB, automatic on first run)
 
 ### Usage
 
-**Interactive mode** (just run it):
+**Interactive mode** — just run it, it will ask for inputs:
 ```bash
 python convert.py
 ```
@@ -83,21 +113,43 @@ python convert.py
 
 **Command-line mode:**
 ```bash
-# Multi-stem mode
+# Multi-stem mode (recommended)
 python convert.py ./my_stems/ --ref singer.mp3 --output ./result/
 
 # Single file mode (auto-separates vocals with Demucs)
 python convert.py song.mp3 --ref singer.mp3
 
-# Individual tracks only (no auto-mix)
+# Output individual tracks only (skip auto-mix)
 python convert.py ./stems/ --ref singer.mp3 --no-mix
+```
+
+**Try with the included demo:**
+```bash
+python convert.py ./examples/demo_stems/ --ref ./examples/reference_voice.wav
 ```
 
 ---
 
 ## How It Works
 
+### Architecture
+
+```
+                         ┌─────────────────────────────────┐
+                         │     YingMusic-SVC (Zero-shot)    │
+                         │                                   │
+                         │  Whisper ──> Content (lyrics)     │
+                         │  RMVPE ───> F0 (pitch)           │
+                         │  CAMPPlus ─> Style (voice timbre) │
+                         │         ↓                         │
+                         │  DiT + Flow Matching ──> Output   │
+                         └─────────────────────────────────┘
+```
+
 ### Stem Mode (recommended)
+
+Each vocal stem is converted independently, then reassembled with the original instrumental:
+
 ```
 Vocal Stem 1  ──> SVC ──> Silence Mask ──> Clean Track 1 ─┐
 Vocal Stem 2  ──> SVC ──> Silence Mask ──> Clean Track 2  ├──> Mix
@@ -107,21 +159,39 @@ Instrumental  ──────────────────────
 ```
 
 ### Single Mode
+
+When you don't have stems, the tool auto-separates vocals first:
+
 ```
 Audio File ──> Demucs ──> Vocals    ──> SVC ──> Converted Vocal ─┐
                       └── No Vocals ─────────────────────────────┘──> Mix
 ```
 
-### Key Technical Details
+---
 
-- **Silence Masking**: SVC models hallucinate audio in silent regions. We apply a mask from the original stems to ensure silence stays silent.
-- **Per-track Volume Matching**: Each converted track is matched to its original's RMS level.
-- **Auto Reference Extraction**: Automatically finds the most energetic 25-second segment from your reference audio.
-- **Single Model Load**: The model loads once and converts all tracks sequentially — no redundant loading.
+## Key Technical Details
+
+### Silence Masking
+
+SVC models tend to "hallucinate" audio in silent regions — generating faint sounds where the original is completely silent. We solve this by creating a mask from the original stem and applying it to the converted output. Silence stays silent.
+
+### Per-Track Volume Matching
+
+Each converted track is gain-matched to its original's RMS level. This ensures the vocal balance of the original mix is preserved after conversion.
+
+### Auto Reference Extraction
+
+You can provide any length of reference audio. The tool automatically finds the most energetic 25-second segment — the optimal length for YingMusic-SVC.
+
+### Single Model Load
+
+The SVC model loads once and processes all stems sequentially. No redundant model loading, even for 15+ stem tracks.
 
 ---
 
-## Input Folder Structure
+## Input
+
+### Folder Structure
 
 The scanner auto-detects your folder structure:
 
@@ -129,13 +199,13 @@ The scanner auto-detects your folder structure:
 ```
 my_stems/
 ├── Main/
-│   ├── Vocal Main 1.wav
-│   ├── Vocal Main 2.wav
-│   └── Vocal ADL.wav
+│   ├── vocal_main_1.wav
+│   ├── vocal_main_2.wav
+│   └── vocal_adlib.wav
 ├── BGV/
-│   ├── BGV 1.wav
-│   └── BGV 2.wav
-└── inst.wav
+│   ├── vocal_bgv_1.wav
+│   └── vocal_bgv_2.wav
+└── instrumental.wav
 ```
 
 **Flat structure (also works):**
@@ -147,7 +217,19 @@ my_stems/
 └── instrumental.wav
 ```
 
-Files with keywords like `inst`, `instrumental`, `karaoke`, `bgm` are auto-detected as instrumentals.
+### Auto-Classification Rules
+
+| Classification | Keywords / Rules |
+|---|---|
+| **Vocal** (converted) | Files in `Main/`, `BGV/`, `Vocal/` folders, or filenames containing: `vocal`, `voice`, `main`, `bgv`, `chorus`, `harmony`, `backing`, `adlib`, `lead` |
+| **Instrumental** (kept as-is) | Filenames containing: `instrumental`, `inst`, `karaoke`, `bgm`, `mr` |
+
+### Reference Voice
+
+- Any audio format (WAV, MP3, FLAC, etc.)
+- 15–25 seconds of **singing** voice works best
+- The tool auto-extracts the best segment if your file is longer
+- **Tip:** Use a reference voice with a similar genre/energy to your source for best results
 
 ---
 
@@ -155,25 +237,56 @@ Files with keywords like `inst`, `instrumental`, `karaoke`, `bgm` are auto-detec
 
 ```
 output/
-├── clean/              # Individual converted tracks (load these in your DAW)
-│   ├── Vocal Main 1.wav
-│   ├── Vocal Main 2.wav
-│   ├── BGV 1.wav
+├── clean/              # Individual converted tracks
+│   ├── vocal_main_1.wav
+│   ├── vocal_main_2.wav
+│   ├── vocal_bgv_1.wav
 │   └── ...
-└── mix_final.wav       # Auto-mixed result (all tracks + instrumental)
+├── mix_final.wav       # Auto-mixed result (all tracks + instrumental)
+└── _raw/               # Raw SVC output (before silence masking)
 ```
 
-**Pro tip:** For best results, import the `clean/` tracks + your instrumental into [Audacity](https://www.audacityteam.org/) or your DAW and mix manually.
+**Pro tip:** For the best results, import the `clean/` tracks + your original instrumental into [Audacity](https://www.audacityteam.org/) or your DAW and mix manually. The auto-mix is convenient, but manual mixing gives you full control.
+
+---
+
+## Where to Get Stems
+
+| Source | Description |
+|---|---|
+| **Your DAW** | Export stems from FL Studio, Logic Pro, Ableton, etc. |
+| **AI music generators** | [Suno](https://suno.com/), [Udio](https://udio.com/) can export stems |
+| **Remix packs** | Many artists release official stems for remix contests |
+| **Creative Commons** | [Cambridge-MT](https://www.cambridge-mt.com/ms/mtk/), [MUSDB18](https://sigsep.github.io/datasets/musdb.html) |
+| **No stems at all?** | Use Single mode — it works with any audio file |
+
+---
+
+## Performance
+
+Measured on NVIDIA RTX 3070 (8GB VRAM):
+
+| Step | Time |
+|---|---|
+| Model loading | ~30s (first run only) |
+| Per-track conversion (100 diffusion steps) | ~45s |
+| Silence masking + volume matching | ~5s/track |
+| 17-track song (e.g., 5 main + 12 BGV) | ~15 min total |
 
 ---
 
 ## Powered By
 
-- [YingMusic-SVC](https://github.com/GiantAILab/YingMusic-SVC) — State-of-the-art zero-shot singing voice conversion
-- [Demucs](https://github.com/facebookresearch/demucs) — Music source separation by Meta
+- **[YingMusic-SVC](https://github.com/GiantAILab/YingMusic-SVC)** — State-of-the-art zero-shot singing voice conversion ([paper](https://arxiv.org/abs/2512.04793))
+- **[Demucs](https://github.com/facebookresearch/demucs)** — Music source separation by Meta
+- **[PyTorch](https://pytorch.org/)** — Deep learning framework
 
 ---
 
+## Contributing
+
+Contributions are welcome! Feel free to open issues or pull requests.
+
 ## License
 
-MIT
+[MIT](LICENSE)
