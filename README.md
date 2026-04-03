@@ -37,7 +37,7 @@ All demo audio is AI-generated with [Suno](https://suno.com/) — fully copyrigh
 ### Installation
 
 ```bash
-git clone --recursive https://github.com/daewook/stem-voice-clone.git
+git clone --recursive https://github.com/Daewooki/stem-voice-clone.git
 cd stem-voice-clone
 
 # Windows
